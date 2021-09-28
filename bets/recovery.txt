@@ -1,0 +1,162 @@
+def parse_melbet(time=time):
+    parse_link = 'https://m.melbet.ru/line/Football/'
+    # source = requests.get(parse_link, headers=headers).text
+    # time.sleep(10)
+    # soup = BeautifulSoup(source, 'lxml')
+
+    # with open('/Users/arseniy/Desktop/Мое/Тест программирование/new.html', 'r') as f:
+    #     contents = f.read()
+    #     soup = BeautifulSoup(contents, 'lxml')
+    # выбираю ссылку для парсинга
+
+    # parse_link = 'https://m.melbet.ru/line/football/'
+    # перехожу по ней в браузере
+    driver.get(url=parse_link)
+    time.sleep(30)
+    html = driver.page_source
+    soup = BeautifulSoup(html, 'lxml')
+
+    # нахожу все события
+    events = soup.find_all('div', attrs={'class': 'events__box'})
+
+    print(events)
+
+    # делаю перебор по каждому событию
+    for event in events:
+        # пытаюсь найти название лиги
+        try:
+            league = event.find('div', attrs={'class': 'events__cell events__title linkOnLeague'}).get_text()
+            # league = soup.find('li',attrs={'class':'events__item events__item_live events__item_head active sport_1'}).text
+            # print(league)
+        except:
+            league = None
+
+        # получаю коэффициенты
+        koeffs = event.find_all('div', attrs={'class': 'js-coef'})
+
+        # далее нужно получить название каждого коэффициента и его значение
+
+        koeffs_dict = {}
+        for koef in koeffs:
+            # название коэффициента
+            koef_name = koef.find('div', attrs={'class': 'coef__item coef__name'}).get_text()
+            # значение коэффициента
+            koef_num = koef.find('a', attrs={'class': 'coef__item coef__num'}).get_text()
+
+            #     добавляю коэффициенты в словарь
+            koeffs_dict[koef_name] = koef_num
+
+        # получаю названия играющих команд
+        teams = event.find_all('div', attrs={'class': 'events__team'})[0].text + '-' + \
+                event.find_all('div', attrs={'class': 'events__team'})[1].text
+
+        # получаю ссылку на матч
+        link = 'https://m.melbet.ru/' + \
+               event.find('div', attrs={'class': 'events__row'}).find('div', attrs={'class': 'events__cell'})[
+                   'data-href']
+
+        # # получаю время/дату
+        # source1 = requests.get(link, headers=headers).text
+        # soup1 = BeautifulSoup(source1, 'lxml')
+        #
+        # date = soup1.find_all('div',attrs={'class':'tablo__num'})
+
+        date = event.find('div', attrs={'class': 'events__cell events__cell_row events__cell_time'})
+        print(date)
+
+        # # если есть дата, а не счетчик
+        if date.find('div', attrs={
+            'class': 'events__time events__time_dop events__text events__text_small events__text_shade'}):
+            # вывожу дату
+            # получаю сначала список из 2х элементов - дата и время
+            # затем их скрепляю
+            date = date.find_all('div', attrs={
+                'class': 'events__time events__time_dop events__text events__text_small events__text_shade'})
+            date = date[0].get_text() + ' ' + date[1].get_text()
+
+        # если это все таки счетчик
+        else:
+            # date = 'Скоро'
+            date = event.find('div', attrs={'class': 'events__cell events__cell_row events__cell_time'}).find_all('ul',
+                                                                                                                  attrs={
+                                                                                                                      'class': 'flip'})
+            time = ''
+            for i in date:
+                try:
+                    time = time + i.get_text()
+
+                except:
+                    pass
+            print(time)
+
+        # вывожу сначала название лиги
+        if league:
+            print(league + '\n')
+        else:
+            pass
+
+        print(teams)
+        print(link)
+        print(date)
+        print(koeffs_dict)
+        # print(koeffs)
+        print('\n')
+    # print(events)
+
+
+
+
+
+
+
+    №№№№№№
+
+    # выбор решения
+        decision = check_koef(main_dict, link, koef)
+        if decision:
+            print('update')
+            # делаем какие то изменения
+
+        else:
+            pass
+
+            №№№№№
+
+
+    # проверка, есть ли изменения
+def check_koef(main_dict, link, koef):
+    # получаю значения с словаря
+    dict_values = main_dict.get(link)['koeffs'].values()
+    # получаю значения текущих коэфф
+    koef_values = koef.values()
+
+    old_list = []
+    new_list = []
+
+    for i in koef_values:
+        new_list.append(i)
+
+    for i in dict_values:
+        old_list.append(i)
+
+
+    for i in range(len(new_list)):
+        if new_list[i] == old_list[i]:
+            pass
+        else:
+            print(f'changed {old_list} to {new_list}')
+            return True
+
+    # return False
+
+
+
+
+
+    # если существует уже запись о событии - пока пропускаем
+    if main_dict.get(link):
+
+        pass
+    # если события нет в словаре, то записывает
+    else:
+        print('added')

@@ -1,0 +1,240 @@
+from bs4 import BeautifulSoup
+from discord_webhook import DiscordWebhook, DiscordEmbed
+import time
+
+from selenium import webdriver
+
+headers = {
+    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36'}
+
+item = {}
+
+option = webdriver.ChromeOptions()
+chrome_prefs = {}
+option.experimental_options["prefs"] = chrome_prefs
+chrome_prefs["profile.default_content_settings"] = {"images": 2}
+chrome_prefs["profile.managed_default_content_settings"] = {"images": 2}
+option.add_argument('--window-size=10,10')
+driver = webdriver.Chrome(options=option)
+
+def main():
+
+    parse_link = 'https://street-beat.ru/cat/man/krossovki;kedy/nike;jordan/air-force;air-jordan-1/new/for_basketball;lifestyle/'
+
+    # перехожу по ссылке, с которой будем доставать вещи
+    driver.get(url=parse_link)
+
+    # сканирую все ссылки на вещи
+    html = driver.page_source
+    soup = BeautifulSoup(html, 'lxml')
+    item_links = soup.find_all('a', attrs={'class': 'link catalog-item__img-wrapper ddl_product_link'})
+
+
+    for href in item_links:
+        item_link = 'https://street-beat.ru' + href.get('href')
+
+        # если ссылки нет в черном листе
+        # делаем парсинг
+        if check_blacklist(item_link):
+            a = time.time()
+            monitor(item_link)
+            print(
+                time.time() - a
+            )
+        else:
+            pass
+
+def monitor(item_link):
+    # открываю ссылку с айтемом
+    driver.get(url=item_link)
+    html = driver.page_source
+
+    soup = BeautifulSoup(html, 'lxml')
+
+    # список с размерами
+    sizes = get_sizes(soup)
+
+    # список с oos размерами
+    missing = get_oos_sizes(soup)
+
+    # получаю список из двух массивов - всех размеров и оос размеров
+    all_sizes_result = get_all_sizes(missing, sizes, driver)
+
+    # получаю инсток размеров
+    actual_sizes = get_actual_size(all_sizes_result[0], all_sizes_result[1])
+
+    # далее проверяю на новизну
+    choice = check_notification(actual_sizes, item_link)
+
+    if choice:
+        #     выполняю все операции ниже
+        # получаю картинку
+        img = get_image(soup)
+
+        # получаю цену вещи
+        price = get_item_price(soup)
+
+        # получаю имя товара
+        item_name = get_item_name(soup)
+        # print(item_name)
+        # отправляю в дискорд
+        send_to_discord(item_name, item_link, img, actual_sizes, price)
+
+    else:
+        pass
+
+
+def get_size(soup):
+    spisok = []
+    # тестовый парсинг размеров
+    for i in soup.find('ul', attrs={'class': 'sizes__table hidden', 'data-size-type': 'tab_us'}):
+        if str(i).find('<li class="missing">'):
+            try:
+                print(i.text.replace('\n', ''))
+                spisok.append(i.text.replace('\n', ''))
+
+            except:
+                pass
+    return spisok
+
+def check_blacklist(item_link):
+    filename = 'blacklist.txt'
+
+    with open(filename, 'r') as rf:
+        read = rf.read()
+        # если ссылки на айтем нет в черном листе
+        if item_link not in read:
+            return True
+
+        # если она есть
+        else:
+            return False
+
+def get_image(soup):
+    img = str(soup.find('div',attrs={'data-slick-index':'1'}).find('img').get('src')).replace('100_100_1','500_500_1')
+
+    return img
+
+
+def get_item_name(soup):
+    item_name = soup.find('h1', attrs={'class': 'product-heading'}).select('span')[0].text
+
+    return item_name
+
+
+def get_oos_sizes(soup):
+    missing = soup.find_all('li', attrs={'class': 'missing'})
+
+    return missing
+
+
+def get_sizes(soup):
+    sizes = soup.find_all('ul', attrs={'class': 'sizes__table hidden'})[1]
+
+    return sizes
+
+
+def get_all_sizes(missing, sizes, driver):
+    # пробегаюсь по каждому, тк имеются и юс и еу там размеры
+    # oos sizes
+    oos_sizes = []
+    for li in missing:
+        try:
+            oos_sizes.append(li.find('input', attrs={'name': 'size-us'})['data-size'])
+        except:
+            pass
+
+    # нахожу все размеры
+    all_sizes = []
+    for i in sizes:
+        try:
+
+            i = i.find('label')
+            if i == -1:
+                pass
+            else:
+                all_sizes.append(i.text)
+        except:
+            driver.close()
+
+    return all_sizes, oos_sizes
+
+# получает список с инсток us размерами
+def get_actual_size(all_sizes, oos_sizes):
+    actual_sizes =[]
+    try:
+        for i in all_sizes:
+            # если размер есть в оос
+            if i in oos_sizes:
+                 pass
+            else:
+                actual_sizes.append(i)
+    except Exception as e:
+        print(e)
+
+    # выводит список с инсток us размерами
+    return actual_sizes
+
+
+def get_item_price(soup):
+    price = soup.find('div',attrs={'class':'price--current'}).text
+
+    return price
+
+
+def check_notification(actual_sizes, link):
+    # берет текущие размеры и сверяет с последними размерами, которые выводились
+    # далее по алгоритму и выводим решение
+
+    try:
+        # если есть запись о размере в словаре то проделываем алгоритм
+        if item.get(link):
+            # если размеры сохраненные и текущие идентичны, то ничего не выводим
+            if item.get(link) == actual_sizes:
+                return False
+
+            else:
+                print(f"sizes of {link} changed")
+                return True
+
+        # иначе просто добавляем эти размеры в словарь
+        else:
+            print(f"sizes of {link} added")
+            item[link] = actual_sizes
+
+            return True
+
+    except Exception as e:
+        print(e)
+
+
+def send_to_discord(item_name, item_link, img, actual_sizes, price):
+    webhook = 'https://discordapp.com/api/webhooks/706058068512866325/fuicGAprHTGZ86FQE0TED62Ik6VaHrHcI1-UE-MN3KCI12cKarI5MrAkDoBg1M1rWXm9'
+    webhook = DiscordWebhook(url=webhook)
+    embed = DiscordEmbed(title=item_name, url=item_link, color='16711680')
+    embed.set_thumbnail(url=img)
+
+    embed.add_embed_field(name='Price', value=price, inline=False)
+    # обработчик размеров
+    i = 0
+    string = ''
+    while i != (len(actual_sizes)):
+
+        # создание колонки
+        if (i % 5 == 0 and i != 0) or (i == len(actual_sizes) - 1):
+            string += actual_sizes[i]
+            embed.add_embed_field(name='Sizes', value=string, inline=True)
+            string = ''
+        # иначе простое добавление текста
+        else:
+            string += actual_sizes[i] + '\n'
+
+        i += 1
+
+    webhook.add_embed(embed)
+    webhook.execute()
+
+while True:
+    monitor('https://street-beat.ru/d/krossovki-nike-ct2298-101/')
+    time.sleep(30)

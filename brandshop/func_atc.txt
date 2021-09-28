@@ -1,0 +1,28 @@
+def createAtc(link):
+    source = requests.get(link, headers=headers).text
+    soup = BeautifulSoup(source, 'lxml')
+    try:
+        # статичные
+        option_id = soup.find('div',attrs={'class':'product-size'}).findAll('input')[0]['name'][7:-1]
+        product_id = soup.find('div', attrs={'class': 'product-size'})['data-product-id']
+    except:
+        pass
+    sizes = soup.findAll('div', attrs={'class': 'sizeselect'})
+    # for i in sizes:
+    #     # меняющиеся
+    #     data_option_id = i.get('data-option-id')
+    #     option_value_id = i.get('data-option-value-id')
+    embed = DiscordEmbed()
+    for i in range(len(item_size)):
+        string =''
+        data_option_id = sizes[i].get('data-option-id')
+        option_value_id = sizes[i].get('data-option-value-id')
+        if i%6==0:
+            a = embed.add_embed_field(name='Sizes', value=string, inline=True)
+            string=''
+            string += item_size[
+                          i] + '[[' + 'ATC' + ']](' + f'https://pasichniy-private.com/pages/brandshop?product_id={product_id}&option_value_id={option_value_id}&option_id={option_id}&option={data_option_id}' + ')' + "\n"
+
+        else:
+            string += item_size[i] +  '[['+'ATC'+']]('+ f'https://pasichniy-private.com/pages/brandshop?product_id={product_id}&option_value_id={option_value_id}&option_id={option_id}&option={data_option_id}' +')' +"\n"
+    return a

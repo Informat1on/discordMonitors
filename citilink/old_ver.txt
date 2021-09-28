@@ -1,0 +1,100 @@
+from bs4 import BeautifulSoup
+import requests
+from discord_webhook import DiscordWebhook, DiscordEmbed
+import json
+import time
+
+item_dict = {}
+a = 'https://discord.com/api/webhooks/706058068512866325/fuicGAprHTGZ86FQE0TED62Ik6VaHrHcI1-UE-MN3KCI12cKarI5MrAkDoBg1M1rWXm9'
+b = 'https://discord.com/api/webhooks/807887671329685534/zMdV4CqOxzqpMphItQie7lgtthz40bZDJtf3ny2W97fd4MsBdg_4gf19BPymKvwthiYy'
+status = a
+
+proxies = {
+    'http': 'http://MYMpC4:2Hvu2A@194.67.214.169:9780',
+    'https': 'http://MYMpC4:2Hvu2A@194.67.214.169:9780',
+}
+
+proxie_status = 'No'
+
+headers = {'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
+           'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36'}
+def main():
+    config = json.load(open('config.json'))
+    links = config['links']
+    refresh_time = config['refresh_time']
+
+    print(f'{time.asctime()} started checking items..')
+    monitor(links,status,proxie_status)
+    print(f'{time.asctime()} success! all sent to discord')
+    time.sleep(refresh_time)
+
+
+def monitor(links,status,proxie_status):
+    keywords = ('Игровая консоль')
+    for link in links:
+        try:
+            if proxie_status == 'No':
+                source = requests.get(link,headers=headers).text
+                proxie_status = 'Yes'
+            else:
+                source = requests.get(link, headers=headers,proxies=proxies).text
+                proxie_status = 'No'
+
+            soup = BeautifulSoup(source,'lxml')
+
+            products = soup.find_all('div',class_='product_data__gtm-js product_data__pageevents-js ProductCardVertical js--ProductCardInListing ProductCardVertical_normal ProductCardVertical_shadow-hover ProductCardVertical_separated')
+            # перебираю каждую карточку айтема
+            for item in products:
+                title = item.find('div',class_='ProductCardVertical__description').find('a').get('title')
+
+                # если подходит под кейворды
+                if title.startswith(keywords):
+                    link = 'https://www.citilink.ru' + item.find('div', class_='ProductCardVertical__description').find('a').get('href')
+                    price = item.find('span',class_='ProductCardVerticalPrice__price-current_current-price').text.replace('\n','').replace(' ','')
+                    image = item.find('div',class_='ProductCardVertical__picture-hover_part js--ProductCardInListing__picture-hover_part').get('data-src')
+                else:
+                    continue
+
+
+                # если появилась в наличии
+                # два статуса - ресток и солд
+                try:
+                    # если есть запись - значит выводили
+                    # нужно проверить еще раз
+                    if item_dict.get(link):
+                        continue
+                        # есть ли она еще в наличии
+                    else:
+                        print(f'Sending to discord {title}')
+                        item_dict[link] = {'price': price, 'title': title, 'image': image}
+                        # сделано, чтобы не лагало при выводе в один вебхук
+                        if status == a:
+                            send_to_discord(link,title,image,price, a)
+                            status = b
+                        elif status == b:
+                            send_to_discord(link, title, image, price, b)
+                            status = a
+
+
+                except Exception as e:
+                    print(e)
+
+        except Exception as e:
+            print(e)
+            time.sleep(180)
+            continue
+
+
+
+def send_to_discord(link,title,image,price, webhook):
+    # webhook = 'https://discord.com/api/webhooks/706058068512866325/fuicGAprHTGZ86FQE0TED62Ik6VaHrHcI1-UE-MN3KCI12cKarI5MrAkDoBg1M1rWXm9'
+    webhook = DiscordWebhook(url=webhook)
+
+    embed = DiscordEmbed(title=title, url=link, color='16711680')
+    embed.set_thumbnail(url=image)
+    embed.add_embed_field(name='Price', value=price, inline=True)
+    webhook.add_embed(embed)
+    webhook.execute()
+
+while True:
+    main()
